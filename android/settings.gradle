@@ -1,0 +1,3 @@
+rootProject.name = 'VideoTracker'
+
+include ':app'
