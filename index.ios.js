@@ -19,7 +19,7 @@ class VideoTracker extends Component {
 
   constructor() {
     super();
-    this.items = [];
+
     GoogleSignin.configure({
       iosClientId: "616713603335-kt6socrtqslikninkvnej79nl6ifog4i.apps.googleusercontent.com",
       scopes: [
@@ -27,8 +27,13 @@ class VideoTracker extends Component {
       ]
     })
     .then(() => {
-      // you can now call currentUserAsync()
+      GoogleSignin.currentUserAsync().then(this.onSignIn.bind(this));
     });
+
+    this.ds = new ListView.DataSource({rowHasChanged: (r1, r2) => r1 !== r2});
+    this.state = {
+      dataSource: this.ds.cloneWithRows([]),
+    };
   }
 
   fetchYoutube(suffix) {
@@ -42,31 +47,37 @@ class VideoTracker extends Component {
   }
 
   getWatchLater() {
-    return this.fetchYoutube("channels?part=contentDetails&mine=true")
-      .then((response) => response.items[0].contentDetails.relatedPlaylists.watchLater);
+    return this.fetchYoutube("playlists?part=snippet&mine=true")
+      .then((response) => {
+        console.log(response);
+        return response.items[0].id;
+      });
   }
 
   getPlaylistItems(playlistId) {
+    console.log(playlistId);
     return this.fetchYoutube("playlistItems?part=snippet&playlistId=" + playlistId)
       .then((response) => { console.log(response); return response; });
   }
 
+  onSignIn(user) {
+    this.accessToken = user.accessToken;
+    this.getWatchLater()
+      .then((watchLaterId) => this.getPlaylistItems(watchLaterId).then((response) => {
+        this.setState({
+          dataSource: this.ds.cloneWithRows(response.items)
+        });
+      }));
+  }
+
   signIn() {
     GoogleSignin.signIn()
-      .then((user) => {
-        // console.log(user);
-
-        this.accessToken = user.accessToken;
-        this.getWatchLater()
-          .then((watchLaterId) => this.getPlaylistItems(watchLaterId).then((response) => {this.items = response.items; this.forceUpdate();}));
-      })
+      .then(this.onSignIn.bind(this))
       .catch((err) => {
         console.error(err);
       })
       .done();
   }
-
-
 
   render() {
     if (!this.accessToken) {
@@ -80,37 +91,54 @@ class VideoTracker extends Component {
         </View>
       );
     } else {
-      return (<View>
-          {this.items.map((item) => {
-            var thumb = item.snippet.thumbnails ? item.snippet.thumbnails.default : null;
-            console.log(item);
-            return (<View key={item.id}>
-                <Image source={thumb} />
-                <Text>{item.snippet.title}</Text>
-              </View>);
-          })}
-        </View>);
+      return <ListView
+        dataSource={this.state.dataSource}
+        renderRow={this.renderVideo}
+        style={styles.videoList}/>;
     }
+  }
+
+  renderVideo(item) {
+    var thumb = item.snippet.thumbnails ? item.snippet.thumbnails.default : null;
+    return (<View key={item.id} style={styles.videoContainer}>
+        <Image source={thumb} style={styles.videoThumb} />
+        <View style={styles.videoTitleContainer}>
+          <Text style={styles.videoTitle}>
+            {item.snippet.title}
+          </Text>
+        </View>
+      </View>
+    );
   }
 }
 
-// const styles = StyleSheet.create({
-//   container: {
-//     flex: 1,
-//     justifyContent: 'center',
-//     alignItems: 'center',
-//     backgroundColor: '#F5FCFF',
-//   },
-//   welcome: {
-//     fontSize: 20,
-//     textAlign: 'center',
-//     margin: 10,
-//   },
-//   instructions: {
-//     textAlign: 'center',
-//     color: '#333333',
-//     marginBottom: 5,
-//   },
-// });
+const styles = StyleSheet.create({
+  videoList: {
+    flexDirection: 'column',
+  },
+  videoContainer: {
+    flex: 1,
+    padding: 10,
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    borderBottomWidth: 1,
+    borderBottomColor: '#aaaaaa',
+  },
+  videoThumb: {
+    height: 54,
+    width: 72,
+    marginRight: 10,
+  },
+  videoTitleContainer: {
+    flex: 1,
+    flexDirection: 'column',
+    // alignItems: 'center',
+    // justifyContent: 'space-around',
+  },
+  videoTitle: {
+    fontSize: 20,
+  },
+});
 
 AppRegistry.registerComponent('VideoTracker', () => VideoTracker);
